@@ -1,13 +1,10 @@
 [
     {
-    "zagolovok":"РЕЛИЗ СКРИПТА", 
-    "text":"Релиз скрипта.", 
-    "ex":"492", 
-    "ey": "170", 
-    "picurl":"https://pp.userapi.com/fFhPPMps-mi4t0nrTd7oJY5hpJsFL-DWi2Hc0g/aI6-oujqBLE.jpg", 
-    "picx":"484", 
-    "picy":"124", 
-    "picname":"picnews1", 
-    "date":"01.05.2020"
+        "zagolovok":"zagolovok1",
+        "text":"text1"
     },
+    {
+        "zagolovok":"zagolovok2",
+        "text":"text2"
+    }
 ]
