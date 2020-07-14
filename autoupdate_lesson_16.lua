@@ -14,8 +14,8 @@ u8 = encoding.UTF8
 local themes = import "resource/imgui_themes.lua"
 local fa = require 'fAwesome5'
 
-local script_vers = 19
-local script_vers_text = "1.8"
+local script_vers = 20
+local script_vers_text = "2.0"
 
 --------------------------------------------
 local directIni = 'PrisonHelper\\PrisonHelper.ini'
