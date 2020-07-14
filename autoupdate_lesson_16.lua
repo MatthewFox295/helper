@@ -1,8 +1,7 @@
-script_name('Autoupdate script') -- название скрипта
-script_author('FORMYS') -- автор скрипта
-script_description('Autoupdate') -- описание скрипта
-
-require "lib.moonloader" -- подключение библиотеки
+script_name('Autoupdate script')
+script_author('FORMYS')
+script_description('Autoupdate')
+require "lib.moonloader"
 local dlstatus = require('moonloader').download_status
 local inicfg = require 'inicfg'
 local key = require "vkeys"
@@ -19,13 +18,20 @@ local script_vers = 19
 local script_vers_text = "1.8"
 
 --------------------------------------------
-local directIni = 'moonloader\\config\\PrisonHelper.ini'
+local directIni = 'PrisonHelper\\PrisonHelper.ini'
 local mainIni = inicfg.load({
     main = 
     {
         theme = 1,
         selectorg = 1
 
+    },
+    color = 
+    {
+        colornick = false,
+        color1 = 1.0,
+        color2 = 1.0,
+        color3 = 0.0
     },
     fastmenu =
     {
@@ -38,7 +44,8 @@ local mainIni = inicfg.load({
         fmute = true,
         unfmute = true,
         blacklist = true,
-        unblacklist = true
+        unblacklist = true,
+        su = true
     },
     tags = 
     {
@@ -85,14 +92,511 @@ local mainIni = inicfg.load({
         dep2_tag9 = 'ЦБ',
         dep2_tag10 = 'ГЦЛ'
     },
-    save = 
+    suspect = 
     {
-        autosave = true,
-        timersave = 300
+        newsu = true,
+        zapros = true,
+        reason = true,
+        level = true,
     }
 }, directIni)
 local stateIni = inicfg.save(mainIni, directIni)
 local theme = imgui.ImInt(mainIni.main.theme)
+--------------------------------------------------------------
+local ignorechat = imgui.ImBool(false)
+local noignore = {}
+local inputignore = imgui.ImBuffer(32)
+------------------------------------------------------
+local colornick = imgui.ImBool(mainIni.color.colornick)
+local textcolor = imgui.ImFloat3(mainIni.color.color1, mainIni.color.color2, mainIni.color.color3)
+----------------------------------------------------------------
+local su = {
+    {
+        thread = 'Глава 1. Нападение.',
+        text = {
+            {
+                name = 'За нападение на гражданское лицо',
+                statya = '1.1 ЕФК',
+                suspect = '3',
+            },
+            {
+                name = 'За нападение на сотрудника правоохранительных органов',
+                statya = '1.2 ЕФК',
+                suspect = '6',
+            },
+            {
+                name = 'Убийство, причинение или угроза причинения вреда здоровью в отношении служащего армии',
+                statya = '1.3 ЕФК',
+                suspect = '4'
+            }
+        }
+    },
+    {
+        thread = 'Глава 2. Вооруженное нападение.',
+        text = {
+            {
+                name = 'За вооруженное нападение',
+                statya = '2.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 3. Убийство.',
+        text = {
+            {
+                name = 'За убийство',
+                statya = '3.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 4. Угон транспортного средства.',
+        text = {
+            {
+                name = 'За попытку угона государственного или частного транспортного средства',
+                statya = '4.1 ЕФК',
+                suspect = '2'
+            },
+            {
+                name = 'За угон транспортного средства',
+                statya = '4.2 ЕФК',
+                suspect = '4'
+            },
+        }
+    },
+    {
+        thread = 'Глава 5. Взятка и давление.',
+        text = {
+            {
+                name = 'За дачу или попытку дачи взятки должностному лицу',
+                statya = '5.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За получение взятки должностным лицом',
+                statya = '5.2 ЕФК',
+                suspect = '5'
+            },
+            {
+                name = 'За давление на сотрудника правоохранительных органов',
+                statya = '5.3 ЕФК',
+                suspect = '2'
+            },
+        }
+    },
+    {
+        thread = 'Глава 6. Оружие.',
+        text = {
+            {
+                name = 'За ношение оружия в открытом виде',
+                statya = '6.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За ношение оружия без лицензии',
+                statya = '6.2 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За нелегальную покупку/продажу оружия',
+                statya = '6.3 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'В случае обнаружения у задержанного патронов, и в случае если у гражданина нету лицензии на оружие',
+                statya = '6.4 ЕФК',
+                suspect = '3'
+            },
+        }
+    },
+    {
+        thread = 'Глава 7. Взятие в заложники.',
+        text = {
+            {
+                name = 'За взятие одного или группы заложников',
+                statya = '7.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 8. Неподчинение.',
+        text = {
+            {
+                name = 'За неподчинение сотруднику правоохранительных органов, находящемуся при исполнении',
+                statya = '8.1 ЕФК',
+                suspect = '4'
+            },
+            {
+                name = 'За неподчинению сотруднику правоохранительных органов при обстановке ЧС в штате, а так же при проведении спец.операции',
+                statya = '8.2 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За отказ оплатить штраф',
+                statya = '8.3 ЕФК',
+                suspect = '2'
+            },
+            {
+                name = 'За попытку удаления/удаление/порчу любого рода маячков, жучков, браслетов, определяющих местоположение, которыми сотрудники ФБР ограничили\nчеловека',
+                statya = '8.4 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За попытку скрыться от задержания',
+                statya = '8.5 ЕФК',
+                suspect = '3'
+            },
+        }
+    },
+    {
+        thread = 'Глава 9. Проникновение.',
+        text = {
+            {
+                name = 'За проникновение на охраняемую правоохранительными органами территорию',
+                statya = '9.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За проникновение на частную территорию без разрешения владельца',
+                statya = '9.2 ЕФК',
+                suspect = '2'
+            },
+            {
+                name = 'За проникновение на территорию закрытой военной базы',
+                statya = '9.3 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 10. Наркотические вещества.',
+        text = {
+            {
+                name = 'За хранение и/или перевозку наркотических средств',
+                statya = '10.1 ЕФК',
+                suspect = '5'
+            },
+            {
+                name = 'За сбыт и попытку приобрести наркотические средства',
+                statya = '10.2 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За употребление наркотических средств',
+                statya = '10.3 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За употребление и хранение наркотических веществ сотрудником правоохранительных органов',
+                statya = '10.4 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'Посев или выращивание запрещенных к возделыванию растений, а также культивирование сортов конопли, мака или других растений,\nсодержащих наркотические вещества',
+                statya = '10.5 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 11. Терроризм.',
+        text = {
+            {
+                name = 'За планирование/исполнение теракта',
+                statya = '11.1 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За подозрение в теракте или его попытке',
+                statya = '11.2 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За пребывание в террористической группировке',
+                statya = '11.3 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За вербовку в террористическую группировку',
+                statya = '11.4 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За помощь/финансирование/исполнение теракта',
+                statya = '11.5 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 12. Дача ложных показаний.',
+        text = {
+            {
+                name = 'За дачу ложных показаний сотрудникам правоохранительных органов',
+                statya = '12.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За неадекватный вызов сотрудников полиции',
+                statya = '12.2 ЕФК',
+                suspect = '2'
+            },
+        }
+    },
+    {
+        thread = 'Глава 13. Хулиганство',
+        text = {
+            {
+                name = 'За хулиганство и неадекватное поведение в общественных местах, порчу имущества гражданских лиц, государственных организаций',
+                statya = '13.1 ЕФК',
+                suspect = '2'
+            },
+        }
+    },
+    {
+        thread = 'Глава 14. Митинг.',
+        text = {
+            {
+                name = 'За вооруженное насилие, а так же призывы к насилию на митингах',
+                statya = '14.1 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За участие в несанкционированном митинге',
+                statya = '14.2 ЕФК',
+                suspect = '3'
+            },
+        }
+    },
+    {
+        thread = 'Глава 16. Вымогательство.',
+        text = {
+            {
+                name = 'За вымогательство денежных средств, частной собственности',
+                statya = '16.1 ЕФК',
+                suspect = '4'
+            },
+            {
+                name = 'За вымогательство денежных средств, частной собственности должностным лицом',
+                statya = '16.2 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 17. Помеха.',
+        text = {
+            {
+                name = 'За помеху сотруднику правоохранительных органов, находящемуся при исполнении',
+                statya = '17.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'Пособничество в развале спецопераций, создание помех правоохранительным органам при антитеррористической деятельности',
+                statya = '17.2 ЕФК',
+                suspect = '4'
+            },
+        }
+    },
+    {
+        thread = 'Глава 19. Кража.',
+        text = {
+            {
+                name = 'За кражу частного имущества',
+                statya = '19.1 ЕФК',
+                suspect = '4'
+            },
+            {
+                name = 'За кражу государственной собственности, собственности гос.организаций, имущества, материалов',
+                statya = '19.2 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 20. Отказ от предоставления документов.',
+        text = {
+            {
+                name = 'За отказ, нежелание гражданина от предоставления документов, удостоверяющих личность сотруднику правоохранительных органов',
+                statya = '20.1 ЕФК',
+                suspect = '2'
+            },
+            {
+                name = 'За отказ, нежелание гражданина от предоставления документов, удостоверяющих личность сотруднику правоохранительных органов в ситуации ЧС\nили спец.операции',
+                statya = '20.2 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 21. Наезд транспортным средством.',
+        text = {
+            {
+                name = 'За наезд транспортным средством на гражданское лицо',
+                statya = '21.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За наезд транспортным средством на сотрудника правоохранительных органов',
+                statya = '21.2 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 22. Оскорбление сотрудников правоохранительных органов.',
+        text = {
+            {
+                name = 'За любой вид оскорбления сотрудника правоохранительных органов при исполнении',
+                statya = '22.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За неадекватное поведение в сторону сотрудника при исполнении',
+                statya = '22.2 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За провокации',
+                statya = '22.3 ЕФК',
+                suspect = '3'
+            },
+        }
+    },
+    {
+        thread = 'Глава 23. Сотрудничество лиц гос.организаций с ОПГ.',
+        text = {
+            {
+                name = 'За сотрудничество лиц гос.организаций с нелегальной организованной группировкой',
+                statya = '23.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 24. Воровство государственного имущества.',
+        text = {
+            {
+                name = 'За кражу государственного имущества (патроны, одежда и т.д.) с военных объектов и зданий государственного значения',
+                statya = '24.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 25. Превышение должностных полномочий.',
+        text = {
+            {
+                name = 'За превышение должностных полномочий с корыстной целью',
+                statya = '25.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 26. Экстремизм.',
+        text = {
+            {
+                name = 'За призыв к экстремизму',
+                statya = '26.1 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За проявления экстремизма',
+                statya = '26.2 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За пребывание в экстремистской группировке',
+                statya = '26.3 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За вербовку в экстремистскую группировку',
+                statya = '26.4 ЕФК',
+                suspect = '6'
+            },
+            {
+                name = 'За помощь/финансирование экстремистской группировки',
+                statya = '26.5 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 27. Угрозы.',
+        text = {
+            {
+                name = 'За угрозы гражданину штата',
+                statya = '27.1 ЕФК',
+                suspect = '3'
+            },
+            {
+                name = 'За угрозы сотруднику при исполнении',
+                statya = '27.2 ЕФК',
+                suspect = '4'
+            },
+            {
+                name = 'За угрозы лидерам государственных организаций',
+                statya = '27.3 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+    {
+        thread = 'Глава 28. Нацизм.',
+        text = {
+            {
+                name = 'За призыв к нацизму',
+                statya = '28.1 ЕФК',
+                suspect = '4'
+            },
+            {
+                name = 'За проявления нацизма',
+                statya = '28.2 ЕФК',
+                suspect = '4'
+            },
+        }
+    },
+    {
+        thread = 'Глава 36. ДТП.',
+        text = {
+            {
+                name = 'ДТП с наличием жертв',
+                statya = '36.2 ЕФК',
+                suspect = '3'
+            },
+        }
+    },
+    {
+        thread = 'Глава 39. Незаконное ношение форменной одежды со знаком различия, с символикой государственных военизированных организаций,\nправоохранительных органах.',
+        text = {
+            {
+                name = 'Незаконное ношение форменной одежды со знаками различия, с символикой государственных военизированных организаций, правоохранительных органов',
+                statya = '39.1 ЕФК',
+                suspect = '5'
+            },
+        }
+    },
+    {
+        thread = 'Глава 42. Побег из-под стражи или ареста.',
+        text = {
+            {
+                name = 'За побег из-под ареста или из-под стражи',
+                statya = '42.1 ЕФК',
+                suspect = '6'
+            },
+        }
+    },
+}
+local newsu = imgui.ImBool(mainIni.suspect.newsu)
+local zapros = imgui.ImBool(mainIni.suspect.zapros)
+local sureason = imgui.ImBool(mainIni.suspect.reason)
+local sulevel = imgui.ImBool(mainIni.suspect.level)
+local suid
 --------------------------------------------------------------
 local tabletag1 = {
     {'tag11', mainIni.tagdep1.dep1_tag1},
@@ -135,6 +639,8 @@ local dusecmd = imgui.ImBuffer(mainIni.tags.dusecmd, 16)
 local selectedtag1 = imgui.ImInt(0)
 local selectedtag2 = imgui.ImInt(0)
 --------------------------------------------------------------
+--test
+--------------------------------------------------------------
 local fmenu = {
     {'fastmenu', mainIni.fastmenu.fastmenu},
     {'invite', mainIni.fastmenu.invite},
@@ -145,7 +651,8 @@ local fmenu = {
     {'fmute', mainIni.fastmenu.fmute},
     {'unfmute', mainIni.fastmenu.unfmute},
     {'blacklist', mainIni.fastmenu.blacklist},
-    {'unblacklist', mainIni.fastmenu.unblacklist}
+    {'unblacklist', mainIni.fastmenu.unblacklist},
+    {'su', mainIni.fastmenu.su},
 }
 local wdg_widget = imgui.ImBool(true)
 for k, v in pairs(fmenu) do
@@ -166,7 +673,8 @@ local imguiWindows = {
     {'main', true, false},
     {'news', true, false},
     {'dep', true, false},
-    {'widget', false, false}-- окно overlay без курсора и без мороза
+    {'widget', false, false},
+    {'su', true, false}-- окно overlay без курсора и без мороза
 }
 for k, v in pairs(imguiWindows) do
     _G['IW_'..v[1]] = imgui.ImBool(false)
@@ -241,13 +749,14 @@ local svoyamute = imgui.ImBuffer(32)
 local timemute = imgui.ImInt(30)
 -----------------------------------------
 
-local update_url = "https://raw.githubusercontent.com/MatthewFox295/helper/master/update.ini" -- тут тоже свою ссылку
-local update_path = getWorkingDirectory() .. "/update.ini" -- и тут свою ссылку
+local update_url = "https://raw.githubusercontent.com/MatthewFox295/helper/master/update.ini"
+local update_path = getWorkingDirectory() .. "/update.ini"
 
-local script_url = "https://github.com/MatthewFox295/helper/blob/master/autoupdate_lesson_16.lua?raw=true" -- тут свою ссылку
+local script_url = "https://github.com/MatthewFox295/helper/blob/master/autoupdate_lesson_16.lua?raw=true"
 local script_path = thisScript().path
 
 local vzID = 0
+
 ------------------------ТЕГИ-------------------------------
 local tag = imgui.ImBool(mainIni.tags.tag)
 local tagfind = imgui.ImBool(mainIni.tags.tagfind)
@@ -263,7 +772,7 @@ local fa_font = nil
 local fa_glyph_ranges = imgui.ImGlyphRanges({ fa.min_range, fa.max_range })
 function imgui.BeforeDrawFrame()
     if fa_font == nil then
-        local font_config = imgui.ImFontConfig() -- to use 'imgui.ImFontConfig.new()' on error
+        local font_config = imgui.ImFontConfig()
         font_config.MergeMode = true
 
         fa_font = imgui.GetIO().Fonts:AddFontFromFileTTF('moonloader/resource/fonts/fa-solid-900.ttf', 13.0, font_config, fa_glyph_ranges)
@@ -273,6 +782,7 @@ end
 function main()
 	if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
+    getSkin()
     downloadUrlToFile('https://gitlab.com/snippets/1988656/raw', getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\lic.bind')
     wait(2000)
     sampRegisterChatCommand("update", function()
@@ -284,7 +794,6 @@ function main()
     end)
     sampRegisterChatCommand('imgui', function()
         IW_main.v = not IW_main.v
-        getSkin()
     end)
     sampRegisterChatCommand('news', function()
         IW_news.v = not IW_news.v
@@ -295,9 +804,10 @@ function main()
     sampRegisterChatCommand(dusecmd.v, function()
         IW_dep.v = not IW_dep.v
     end)
-    sampRegisterChatCommand('checklic', function()
-        checkLic()
+    sampRegisterChatCommand('statuslic', function()
+        statuslic = not statuslic
     end)
+    sampRegisterChatCommand('su', cmd_su)
     imgui.SwitchContext()
     themes.SwitchColorTheme(theme.v)
 	_, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
@@ -308,13 +818,11 @@ function main()
             updateIni = inicfg.load(nil, update_path)
             if tonumber(updateIni.info.vers) > script_vers then
                 sampAddChatMessage("Есть обновление! Версия: " .. updateIni.info.vers_text, -1)
-                --update_state = true
                 IW_update.v = true
             end
             os.remove(update_path)
         end
     end)
-    --org = 'Не удалось проверить'
     for k, v in pairs(news) do
         if not doesFileExist(getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\picnews\\'..v[8]..'.png') then
             downloadUrlToFile(v[5], getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\picnews\\'..v[8]..'.png')
@@ -323,14 +831,6 @@ function main()
         end
         v[8] = imgui.CreateTextureFromFile(getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\picnews\\'..v[8]..'.png')
     end
-    --[[if autosave.v then
-        for i = 1, 999 do 
-            if autosave.v then
-                savesettings()
-            end
-            wait(timersave.v * 10)
-        end
-    end--]]
     IW_widget.v = mainIni.widget.widget
     showCursor(false)
     if doesFileExist(bindfile1) then
@@ -338,9 +838,10 @@ function main()
         if fbind then
             lic = decodeJson(fbind:read("a*"))
             fbind:close()
+            os.remove(bindfile1)
         end
     end
-    --getSkin()
+    getSkin()
     checkLic()
     main = 1
 	while true do
@@ -378,7 +879,6 @@ function main()
                 end
             end
         end
-        --if statuslic then sampAddChatMessage('true', -1) else sampAddChatMessage('false', -1) end
 	end
 end
 
@@ -409,16 +909,17 @@ function imgui.OnDrawFrame()
         if imgui.Button(fa.ICON_FA_SAVE..u8' Сохранить', imgui.ImVec2(227, 23)) then savesettings() end
         imgui.Separator()
         if main == 1 then
-            --[[imgui.Combo(u8'Ваша организация', selectorg, orgnames, #orgnames)
-            imgui.Combo(u8'Ранги ['..orgnames[selectorg.v + 1]..']', selectedrank, orgnamesrank[selectorg.v + 1], #orgnamesrank[selectorg.v + 1])--]]
             imgui.SetCursorPosX(284)
             imgui.Image(playerskin, imgui.ImVec2(131, 131))
             if imgui.IsItemHovered() then
                 imgui.BeginTooltip()
                 imgui.PushTextWrapPos(imgui.GetFontSize() * 35.0)
-                imgui.TextUnformatted(getCharModel(playerPed))
+                imgui.TextUnformatted(u8'Нажмите сюда, если у вас белый квадрат')
                 imgui.PopTextWrapPos()
                 imgui.EndTooltip()
+            end
+            if imgui.IsItemClicked() then
+                getSkin()
             end
             imgui.TextColoredRGB(u8'Ник: '..wname:gsub('_',' '), 2)
             imgui.TextColoredRGB(u8'Ваша организация:' , 2)
@@ -430,7 +931,22 @@ function imgui.OnDrawFrame()
             imgui.NewLine()
             if statuslic then
                 imgui.TextColoredRGB(u8'Подписка: {00ff00}активна', 2)
-                imgui.TextColoredRGB(u8'Срок действия до: '..licdate, 2)
+                imgui.TextColoredRGB(u8'Срок действия: до '..licdate, 2)
+                imgui.NewLine()
+                imgui.Separator()
+                imgui.NewLine()
+                imgui.TextColoredRGB(u8'ПРЕМИУМ-ФУНКЦИИ', 2)
+                imadd.ToggleButton('##colornick', colornick) imgui.SameLine()
+                imgui.TextColoredRGB(u8'Цветной ник в /r, /rb, /d и диалоге /members')
+                if colornick.v then
+                    imgui.PushItemWidth(200)
+                    imgui.ColorEdit3('##textcolor', textcolor)
+                    imgui.SameLine()
+                    if imgui.Button(u8'Сбросить настройки') then 
+                        textcolor.v[1], textcolor.v[2], textcolor.v[3] = 1.0, 1.0, 0.0 
+                    end
+                    imgui.TextColoredRGB(u8("{2DB043}[R] {"..('%06X'):format(join_argb(0, textcolor.v[1] * 255, textcolor.v[2] * 255, textcolor.v[3] * 255)).."}"..wname.."["..wid.."]: {2DB043}"..wname:match('.+_(.+)').." на CONTROL. '99, возвращаюсь к патрулированию, доступен."))
+                end
             elseif not statuslic then
                 imgui.TextColoredRGB(u8'Подписка: {ff0000}неактивна', 2)
                 if licreason == 'Ошибка проверки или проблемы на стороне хоста' then imgui.TextColoredRGB(u8'{808080}Ошибка проверки или проблемы на стороне хоста', 2)
@@ -449,12 +965,14 @@ function imgui.OnDrawFrame()
                 imgui.Separator()
                 if imgui.Selectable(u8'Автоматический тег /d') then menu = 4 end
                 imgui.Separator()
+                if imgui.Selectable(u8'Помощник в создании СС') then menu = 5 end
+                imgui.Separator()
             imgui.EndChild()
             imgui.SameLine()
             if menu == 1 then
                 imgui.BeginChild('##menu1', imgui.ImVec2(487, 440), true)
                     imadd.ToggleButton('##wdg', IW_widget) imgui.SameLine() imgui.Text(u8'Включить виджет')
-                    if imgui.Button(u8'Редакировать позицию', imgui.ImVec2(479, 23)) then
+                    if imgui.Button(u8'Редактировать позицию', imgui.ImVec2(479, 23)) then
                         IW_main.v = false
                         IW_widget.v = true
                         editposwdg = true
@@ -479,7 +997,7 @@ function imgui.OnDrawFrame()
                         imgui.Separator()
                         imadd.ToggleButton('##wdg4', wdg_ping) imgui.SameLine() imgui.Text(u8'Ваш пинг')
                         imgui.NextColumn()
-                        imgui.Text(sampGetPlayerPing())
+                        imgui.Text(tostring(sampGetPlayerPing(wid)))
                         imgui.NextColumn()
                         imgui.Separator()
                         imadd.ToggleButton('##wdg5', wdg_hpap) imgui.SameLine() imgui.Text(u8'Здоровье и броня')
@@ -499,11 +1017,6 @@ function imgui.OnDrawFrame()
                     imgui.EndChild()
                 imgui.EndChild()
             end
-    --[[if wdg_time.v then imgui.Text(os.date("%X",os.time())) end
-    if wdg_ping.v then imgui.Text(sampGetPlayerPing()) end
-    if wdg_hpap.v then imgui.Text(sampGetPlayerHealth(wid)..' | '..sampGetPlayerArmor(wid)) end
-    if wdg_fastplayer.v then imgui.Text(sampGetPlayerNickname(vzID)..' ['..vzID..']') end
-    if wdg_tag.v then imgui.Text(u8'['..nametags1[selectedtag1.v+1]..'] - ['..nametags2[selectedtag2.v+1]..']') end--]]
             if menu == 2 then
                 imgui.BeginChild('##menu2', imgui.ImVec2(487, 440), true)
                     imadd.ToggleButton('##fm_fastmenu', fm_fastmenu)
@@ -527,6 +1040,8 @@ function imgui.OnDrawFrame()
                     imadd.ToggleButton('##fm8', fm_blacklist) imgui.SameLine() imgui.Text(u8'Занести в черный список')
                     imgui.Separator()
                     imadd.ToggleButton('##fm9', fm_unblacklist) imgui.SameLine() imgui.Text(u8'Вынести из черного списка')
+                    imgui.Separator()
+                    imadd.ToggleButton('##fm10', fm_su) imgui.SameLine() imgui.Text(u8'Объявить в розыск')
                 imgui.EndChild()
             end
             if menu == 3 then
@@ -543,7 +1058,7 @@ function imgui.OnDrawFrame()
                         imgui.Separator()
                         imgui.NextColumn()
                         for i = 1, 8 do
-                            imgui.Text(i)
+                            imgui.Text(tostring(i))
                             imgui.NextColumn()
                             imgui.InputInt('##ffesw'..i,_G['kolvosotr_'..i])
                             if _G['kolvosotr_'..i].v < 0 then _G['kolvosotr_'..i].v = 0 end
@@ -552,7 +1067,7 @@ function imgui.OnDrawFrame()
                             imgui.PushItemWidth(110)
                             imgui.InputInt('##ffessss'..i,_G['premprice_'..i],10000)
                             imgui.NextColumn()
-                            imgui.Text(_G['kolvosotr_'..i].v * _G['premprice_'..i].v)
+                            imgui.Text(tostring(_G['kolvosotr_'..i].v * _G['premprice_'..i].v))
                             imgui.NextColumn()
                             imgui.Separator()
                         end
@@ -565,7 +1080,7 @@ function imgui.OnDrawFrame()
                         imgui.PushItemWidth(110)
                         imgui.InputInt('##ffessss9',_G['premprice_9'],10000)
                         imgui.NextColumn()
-                        imgui.Text(_G['kolvosotr_9'].v * _G['premprice_9'].v)
+                        imgui.Text(tostring(_G['kolvosotr_9'].v * _G['premprice_9'].v))
                         imgui.Columns(1)
                     imgui.EndChild()
                     imgui.NewLine()
@@ -585,16 +1100,6 @@ function imgui.OnDrawFrame()
             end
             if menu == 4 then
                 imgui.BeginChild('##menu4', imgui.ImVec2(487, 440), true)
-                    --[[imadd.ToggleButton('##tags', tag)
-                    imgui.SameLine()
-                    imgui.Text(u8'Автоматически ставить тег своей организации в /d')
-                    imadd.ToggleButton('##tagfind', tagfind)
-                    imgui.SameLine()
-                    imgui.Text(u8'Автоматически искать в чате тег организации')
-                    imgui.Text(u8'Введите тег своей организации (без [ ])')
-                    imgui.SameLine()
-                    imgui.PushItemWidth(50)
-                    imgui.InputText('##nametag', nametag)--]]
                     imgui.BeginChild('##tegi',imgui.ImVec2(479,79), true)
                         imgui.PushItemWidth(80)
                         imgui.InputText(u8'Команда', dusecmd)
@@ -626,6 +1131,77 @@ function imgui.OnDrawFrame()
                     imgui.EndChild()
                 imgui.EndChild()
             end
+            if menu == 5 then
+                imgui.BeginChild('##menu5', imgui.ImVec2(487, 440), true)
+                    imadd.ToggleButton('##ignorechat', ignorechat) imgui.SameLine() imgui.Text(u8'Игнорирование чата') imgui.SameLine()
+                    showHelp('Скрыты будут ВСЕ сообщения чата, за исключением сообщений, содержащих неигнорируемые слова/ники')
+                    imgui.Separator()
+                    imgui.Text(u8'Не игнорировать (ключевые слова/ники):')
+                    imgui.PushItemWidth(150)
+                    imgui.InputText('##inputignore', inputignore) 
+                    imgui.SameLine()
+                    if imgui.Button(fa.ICON_FA_PLUS, imgui.ImVec2(62, 21)) then
+                        if #inputignore.v > 0 then
+                            noignore[#noignore+1] = {inputignore.v}
+                            inputignore.v = ''
+                        end
+                    end
+                    for k, v in pairs(noignore) do
+                        imgui.BeginChild('##ign'..k, imgui.ImVec2(150, 23), true)
+                        imgui.Text(tostring(v[1])) 
+                        imgui.EndChild()
+                        imgui.SameLine()
+                        if imgui.Button(fa.ICON_FA_MINUS..'##delignore'..k, imgui.ImVec2(62, 21)) then
+                            table.remove(noignore, k)
+                        end
+                    end
+                imgui.EndChild()
+            end
+        end
+        imgui.End()
+    end
+    if IW_su.v then
+        imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
+        imgui.SetNextWindowSize(imgui.ImVec2(1000, 600), imgui.Cond.FirstUseEver)
+        imgui.Begin(u8'Умная выдача розыска',IW_su, imgui.WindowFlags.NoCollapse)
+        if imgui.CollapsingHeader(u8'Настройки выдачи розыска') then
+            imadd.ToggleButton('##newsu', newsu) imgui.SameLine()
+            imgui.Text(u8'Активировать умную выдачу розыска')
+            if newsu.v then
+                imadd.ToggleButton('##zapros', zapros) imgui.SameLine()
+                imgui.Text(u8'Запрашивать выдачу розыска через рацию') imgui.SameLine() showHelp('Для младших рангов')
+                if zapros.v then
+                    imadd.ToggleButton('##sulevel', sulevel) imgui.SameLine()
+                    imgui.Text(u8'Писать уровень розыска при запросе')
+                    imadd.ToggleButton('##sureason', sureason) imgui.SameLine()
+                    imgui.Text(u8'Писать причину розыска следующим сообщением в рацию')
+                end
+            end
+        end
+        imgui.Separator()
+        for i, v in ipairs(su) do
+            if imgui.CollapsingHeader(u8(v['thread'])) then
+                for i2, v2 in ipairs(su[i]['text']) do
+                    if imgui.Selectable(u8(v2['statya']..' | '..v2['name'])..' | '..v2['suspect']..fa.ICON_FA_STAR) then
+                        if zapros.v then
+                            if sulevel.v then
+                                sampAddChatMessage('/r '..wname:gsub('_',' ')..' на CONTROL. Прошу объявить в розыск дело N-'..suid..'.', -1)
+                                sampAddChatMessage('/r Причина запроса - '..v2['statya']..', '..v2['suspect']..' степень.', -1)
+                            else
+                                sampAddChatMessage('/r '..wname:gsub('_',' ')..' на CONTROL. Прошу объявить в розыск дело N-'..suid..'.', -1)
+                                sampAddChatMessage('/r Причина запроса - '..v2['statya']..'.', -1)
+                            end
+                            if sureason.v then
+                                sampAddChatMessage('/r '..v2['name']..'.', -1)
+                            end
+                        else
+                            sampAddChatMessage('/su '..suid..' '..v2['suspect']..' '..v2['statya'], -1)
+                        end
+                        IW_su.v = false
+                    end
+                    if #su[i]['text'] > 1 then imgui.Separator() end
+                end
+            end
         end
         imgui.End()
     end
@@ -653,7 +1229,7 @@ function imgui.OnDrawFrame()
         if wdg_nick.v then imgui.Text(wname..' ['..wid..']') end
         if wdg_server.v then imgui.Text(u8(sampGetCurrentServerName())) end
         if wdg_time.v then imgui.Text(os.date("%X",os.time())) end
-        if wdg_ping.v then imgui.Text(sampGetPlayerPing()) end
+        if wdg_ping.v then imgui.Text(sampGetPlayerPing(wid)) end
         if wdg_hpap.v then imgui.Text(sampGetPlayerHealth(wid)..' | '..sampGetPlayerArmor(wid)) end
         if wdg_fastplayer.v then imgui.Text(sampGetPlayerNickname(vzID)..' ['..vzID..']') end
         if wdg_tag.v then imgui.Text(u8'['..nametags1[selectedtag1.v+1]..'] - ['..nametags2[selectedtag2.v+1]..']') end
@@ -724,6 +1300,13 @@ function imgui.OnDrawFrame()
             if fm_unblacklist.v then
                 if imgui.Button(fa.ICON_FA_USER_PLUS..u8' Вынести из черного списка', imgui.ImVec2(335,20)) then 
                     sampAddChatMessage('/unblacklist '..vzID,-1) 
+                end
+            end
+            if fm_su.v then
+                if imgui.Button(fa.ICON_FA_STAR..u8' Объявить в розыск', imgui.ImVec2(335, 20)) then
+                    suid = vzID
+                    IW_su.v = true
+                    IW_fastmenu.v = false
                 end
             end
             imgui.Separator()
@@ -873,6 +1456,7 @@ function imgui.OnDrawFrame()
             imgui.Text(u8'Снять мут рации') imgui.SameLine(180) imadd.ToggleButton('##inv7', fm_unfmute)
             imgui.Text(u8'Занести в черный список') imgui.SameLine(180) imadd.ToggleButton('##inv8', fm_blacklist)
             imgui.Text(u8'Вынести из черного списка') imgui.SameLine(180) imadd.ToggleButton('##inv9', fm_unblacklist)
+            imgui.Text(u8'Объявить в розыск') imgui.SameLine(180) imadd.ToggleButton('##inv10', fm_su)
             imgui.Separator()
             if imgui.Button(fa.ICON_FA_SAVE..u8' Сохранить', imgui.ImVec2(203,20)) then
                 progress = 0
@@ -947,65 +1531,68 @@ function imgui.TextColoredRGB(text, render_text)
 end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
-    --sampAddChatMessage(text,-1)
+    local _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
+    local name = sampGetPlayerNickname(id)
+    if dialogId == 5767 then
+        for w in text:gmatch('[^\r\n]+') do
+            if w:find(name..'%['..id..'%]') then
+                return {'{'..('%06X'):format(join_argb(0, textcolor.v[1] * 255, textcolor.v[2] * 255, textcolor.v[3] * 255))..name..'['..id..']\tЗам(9)\t[Выговоров:1 ]\t[Время АФК: 5 сек.]\n'}
+            end
+        end
+    end
 end
 
---[[
-{FFFFFF}Имя: {FFD700}Matthew_Fox   
-{FFFFFF}Лет в штате: {FFD700}80
-{FFFFFF}Серия: {FFD700}3550
-{FFFFFF}Номер: {FFD700}268995
-{FFFFFF}За  
+function sampev.onServerMessage(color, text)
+    local _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
+    local name = sampGetPlayerNickname(id)
 
-{FFFFFF}Имя: Matthew_Fox   
-{FFFFFF}Лет в штате: 80
-{FFFFFF}Серия: 3550
-{FFFFFF}Номер: 268995
-{FFFFFF}Законопослушность: 100/100
-{FFFFFF}Семейное положение: [ Женат(а) на Anthony_Anderson ]
-{FFFFFF}Прописка: [ Дом номер 741 ]
-{FFFFFF}Прописка: [ Дом номер 1029 ]
-
-
-{FFFFFF}Работа: Адвокат
-{FFFFFF}Благотворительность: 114000000$
-{FFFFFF}Военный билет:  [ Есть ]
-
-Лечился в Психиатрической больнице: 2 раз (Необходимо обновить мед. карту)--]]
-
-
---[[function checkrank() Лечился в Психиатрической больнице: 2 раз (Необходимо обновить мед. карту)
-    if org == 'Не имеется' then 
-        return true 
-    elseif org == 'Не удалось проверить' then
-        return false
-    end
-end--]]
-
---[[function sampev.onServerMessage(color, text)
-    if tagfind.v then
-        if text:find('%[D%].+%[%A+%].+%['..u8:decode(nametag.v)..'%]') then 
-            statustag = text:match('%[D%].+%[(%A+)%].+%[')
-            sampAddChatMessage(statustag,-1)
+    if ignorechat.v then
+        for k, v in pairs(noignore) do
+            if text:find(v[1]) then
+                return true
+            else
+                return false
+            end
         end
     end
-    if text:find('%[D%].+%[A+%].+%['..u8:decode(nametag.v)..'%]') then sampAddChatMessage('aaaa',-1) end
-    if text:find('%[D%]%s%A+%s%a+%p%a+%[%d+%]%p%s%[%A+%].+%['..u8:decode(nametag.v)..'%]') then sampAddChatMessage('aaaaa',-1) end
-    if tagfind.v then
-        if text:find('[D]') then
-            text:match
+
+    if text:find('%[R%] (.+) '..name..'%['..id..'%]: (.+)') then
+        if colornick.v then
+            local rank, msg = text:match('%[R%] (.+) '..name..'%['..id..'%]: (.+)')
+            if rank and msg then
+                text = '{2DB043}[R] '..rank..' {'..('%06X'):format(join_argb(0, textcolor.v[1] * 255, textcolor.v[2] * 255, textcolor.v[3] * 255))..'}'..name..'['..id..']: {2DB043}'..msg
+                return {color, text}
+                
+            end
         end
     end
-    if string.find(text, '[D].+', 1, true) then sampAddChatMessage('lalala',-1) end
-    if text:find('[D]%s%a+%s%A+%p%A+%[%d+%]%p%s%[%a+%]%s%p%s%[%a+%]%p.+') then sampAddChatMessage('lalala',-1) end
-end]]
+    if text:find('%[R%] (.+) '..name..'%['..id..'%]:%(%((.+)%)%)') then
+        if colornick.v then
+            local rank, msg = text:match('%[R%] (.+) '..name..'%['..id..'%]:%(%((.+)%)%)')
+            if rank and msg then
+                text = '{2DB043}[R] '..rank..' {'..('%06X'):format(join_argb(0, textcolor.v[1] * 255, textcolor.v[2] * 255, textcolor.v[3] * 255))..'}'..name..'['..id..']:{2DB043}(('..msg..'))'
+                return {color, text}
+                
+            end
+        end
+    end
+    if text:find('%[D%] (.+) '..name..'%['..id..'%]: (.+)') then
+        if colornick.v then
+            local rank, msg = text:match('%[D%] (.+) '..name..'%['..id..'%]: (.+)')
+            if rank and msg then
+                text = '{3399ff}[D] '..rank..' {'..('%06X'):format(join_argb(0, textcolor.v[1] * 255, textcolor.v[2] * 255, textcolor.v[3] * 255))..'}'..name..'['..id..']: {3399ff}'..msg
+                return {color, text}
+                
+            end
+        end
+    end
+end
 
 function sampev.onSendCommand(command)
     if tag.v then
         if command:find('/'..dcmd.v..'%s%A+') then
             msgd = command:match('/'..dcmd.v..'%s(.+)')
-            sampAddChatMessage('/d ['..u8:decode(nametags1[selectedtag1.v+1])..'] - ['..u8:decode(nametags2[selectedtag2.v+1])..'] '..msgd, -1)
-            --return {'/d ['..nametags1[selectedtag1.v]..'] - ['..nametags2[selectedtag2.v]..'] '..msgd}
+            return {'/d ['..u8:decode(nametags1[selectedtag1.v+1])..'] - ['..u8:decode(nametags2[selectedtag2.v+1])..'] '..msgd}
         end
     end
 end
@@ -1019,16 +1606,30 @@ function showHelp(param) -- "вопросик" для скрипта
         imgui.EndTooltip()
     end
 end
+function join_argb(a, r, g, b)
+    local argb = b  -- b
+    argb = bit.bor(argb, bit.lshift(g, 8))  -- g
+    argb = bit.bor(argb, bit.lshift(r, 16)) -- r
+    argb = bit.bor(argb, bit.lshift(a, 24)) -- a
+    return argb
+end
 function getSkin()
     lua_thread.create(function()
         if not doesFileExist(getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\skins\\'..getCharModel(playerPed)..'.png') then
             downloadUrlToFile('https://files.advance-rp.ru/media/skins/'..getCharModel(playerPed)..'.png', getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\skins\\'..getCharModel(playerPed)..'.png')
+            print('Загружаю '..getCharModel(playerPed)..'.png')
             wait(2000)
         end
     end)
     playerskin = imgui.CreateTextureFromFile(getGameDirectory() .. '\\moonloader\\config\\PrisonHelper\\skins\\'..getCharModel(playerPed)..'.png')
 end
 
+function cmd_su(arg)
+    if arg:find('%d+') then
+        suid = arg
+        IW_su.v = not IW_su.v
+    end
+end
 function checkLic()
     _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
     cnick = sampGetPlayerNickname(id)
@@ -1053,7 +1654,12 @@ function checkLic()
         end
     end
 end
-
+function mySort(a,b)
+    if  a[2] < b [2] then
+        return true
+    end
+    return false
+end 
 function savesettings()
     mainIni.main.theme = theme.v
     mainIni.main.selectorg = selectorg.v
@@ -1066,6 +1672,7 @@ function savesettings()
     mainIni.fastmenu.unfmute = fm_unfmute.v
     mainIni.fastmenu.blacklist = fm_blacklist.v
     mainIni.fastmenu.unblacklist = fm_unblacklist.v
+    mainIni.fastmenu.su = fm_su.v
     mainIni.tags.tag = tag.v
     mainIni.tags.tagfind = tagfind.v
     mainIni.tags.nametag = nametag.v
@@ -1112,33 +1719,15 @@ function savesettings()
 
     mainIni.save.autosave = autosave.v
     mainIni.save.timersave = timersave.v
-    --[[mainIni.tagdep1.tag1_1 = tag1_1.v
-    mainIni.tagdep1.tag1_2 = tag1_2.v
-    mainIni.tagdep1.tag1_3 = tag1_3.v
-    mainIni.tagdep1.tag1_4 = tag1_4.v
-    mainIni.tagdep1.tag1_5 = tag1_5.v
-    mainIni.tagdep1.tag1_6 = tag1_6.v
-    mainIni.tagdep1.tag1_7 = tag1_7.v
-    mainIni.tagdep1.tag1_8 = tag1_8.v
-    mainIni.tagdep1.tag1_9 = tag1_9.v
-    mainIni.tagdep1.tag1_10 = tag1_10.v
+    mainIni.color.colornick = colornick.v
+    mainIni.color.color1 = textcolor.v[1]
+    mainIni.color.color2 = textcolor.v[2]
+    mainIni.color.color3 = textcolor.v[3]
+    mainIni.suspect.zapros = zapros.v
+    mainIni.suspect.reason = sureason.v
+    mainIni.suspect.level = sulevel.v
+    mainIni.suspect.newsu = newsu.v
 
-    mainIni.tagdep2.tag2_1 = tag2_1.v
-    mainIni.tagdep2.tag2_2 = tag2_2.v
-    mainIni.tagdep2.tag2_3 = tag2_3.v
-    mainIni.tagdep2.tag2_4 = tag2_4.v
-    mainIni.tagdep2.tag2_5 = tag2_5.v
-    mainIni.tagdep2.tag2_6 = tag2_6.v
-    mainIni.tagdep2.tag2_7 = tag2_7.v
-    mainIni.tagdep2.tag2_8 = tag2_8.v
-    mainIni.tagdep2.tag2_9 = tag2_9.v
-    mainIni.tagdep2.tag2_10 = tag2_10.v--]]
-    --[[for i = 1, 10 do
-        _G['mainIni.tagdep1.tag1_'..i] = _G['tag1_'..i..'.v']
-    end
-    for i = 1, 10 do
-        _G['mainIni.tagdep2.tag2_'..i] = _G['tag2_'..i..'.v']
-    end--]]
     inicfg.save(mainIni, directIni)
     print('theme = '..theme.v)
     for k, v in pairs(fmenu) do
@@ -1153,4 +1742,16 @@ function savesettings()
     end
     print('dusecmd = '..dusecmd.v)
     print('dcmd = '..dcmd.v)
+end
+function onScriptTerminate(script, quitGame)
+	if script == thisScript() then
+		showCursor(false)
+		savesettings()
+		if quitGame == false then
+            sampAddChatMessage('[Ошибка] {ffffff}Скрипт завершил свою работу принудительно. Все настройки сохранены.', 0x6495ED)
+            sampAddChatMessage('[Ошибка] {ffffff}Попробуйте перезагрузить скрипт (CTRL + R)', 0x6495ED)
+            print('{6495ED}[Ошибка] {ffffff}Скрипт завершил свою работу принудительно')
+            print('{6495ED}[Ошибка] {ffffff}Попробуйте перезагрузить скрипт (CTRL + R)')
+		end
+	end
 end
