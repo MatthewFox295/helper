@@ -453,10 +453,10 @@ local russian_characters = {
   
 local update_state = false
 
-local update_url = "https://gitlab.com/MatthewFox1/helper/-/raw/master/update.ini"
+local update_url = "https://raw.githubusercontent.com/MatthewFox295/helper/master/update.ini"
 local update_path = getWorkingDirectory() .. "/update.ini"
 
-local script_url = "https://gitlab.com/MatthewFox1/helper/-/raw/master/admintools.lua"
+local script_url = "https://raw.githubusercontent.com/MatthewFox295/helper/master/admintools.lua"
 local script_path = thisScript().path
 
 local imguiWindows = {
