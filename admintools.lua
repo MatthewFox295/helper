@@ -12,8 +12,8 @@ encoding.default = 'CP1251'
 u8 = encoding.UTF8
 imgui.ToggleButton = require('imgui_addons').ToggleButton
 
-local script_vers = 1
-local script_vers_text = "1.0"
+local script_vers = 2
+local script_vers_text = "1.1"
 
 local repsave = imgui.ImInt(0)
 local answerreport = imgui.ImBuffer(100)
